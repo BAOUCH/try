@@ -1,0 +1,59 @@
+/* Centrage et couleur de fond */
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 0;
+  padding: 0;
+  height: 100vh; /* S'assure que la carte est centrée verticalement */
+}
+
+/* Style de la carte */
+#map {
+    border-width: thin;
+    border-style: solid;
+    border-color: black;
+    border-radius: 1rem;
+    width: 60vw; /* Largeur ajustée à l'écran */
+    height: 70vh; /* Hauteur ajustée à l'écran */
+     /* Permet un meilleur centrage */
+    justify-content: center;
+    align-items: center;
+}
+
+.container{
+  grid-template-columns: repeat(2,300px);
+  display: flex;
+}
+
+.chart-container{
+  background-color: white;
+  border: thin solid black;
+  border-radius: 1rem;
+  align-items: center;
+  margin-right: 1rem;
+  
+}
+
+/* Boutons de contrôle des couches */
+.layer-controls {
+  
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+}
+
+button {
+  display: block;
+  padding: 10px;
+  margin: 5px;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+button:hover {
+  background-color:  rgba(0, 0, 0, 0.8);
+}
