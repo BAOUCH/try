@@ -20,11 +20,12 @@
             <canvas class="chart" id="pieChart" width="400" height="400"></canvas>
         </div>
         <div id="map"></div>
-        <div class="layer-controls">
-            <button onclick="showFirstLayerSet()">Village 1</button>
-            <button onclick="showSecondLayerSet()">Village 2</button>
-            <button onclick="showThirdLayerSet()">Village 3</button>
-    </div>
+        
+        <div style="z-index: 9999999;" class="layer-controls">
+            <button id="village1">Village 1</button>
+            <button id="village2">Village 2</button>
+            <button id="village3">Village 3</button>
+        </div>
     </div>
     
     
