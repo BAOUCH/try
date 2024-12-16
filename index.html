@@ -1,44 +1,356 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
-    <title>Leaflet Side-by-side</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="range.css">
-    <link rel="stylesheet" href="layout.css">
-    <link rel="stylesheet" href="style.css">
+    <title>Carte Comparative de Villages</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.css" integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A==" crossorigin="anonymous" referrerpolicy="no-referrer"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- CSS Libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    
+    <!-- Custom CSS -->
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        .chart-container {
+            width: 30%;
+            padding: 10px;
+            background-color: #f4f4f4;
+        }
+        #map {
+            width: 70%;
+            height: 100%;
+        }
+        .layer-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+        .layer-controls button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .layer-controls button:hover {
+            background-color: #45a049;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background-color: rgba(0,0,0,0.1);
+            z-index: 10000;
+            display: none;
+        }
+        .loading-bar {
+            height: 5px;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.5s linear;
+        }
+    </style>
 </head>
 <body>
+    <!-- Loading Bar -->
+    <div id="loading">
+        <div class="loading-bar"></div>
+    </div>
+
     <div class="container">
+        <!-- Chart Container -->
         <div class="chart-container">
             <canvas class="chart" id="pieChart" width="400" height="400"></canvas>
         </div>
+
+        <!-- Map Container -->
         <div id="map"></div>
         
-        <div style="z-index: 9999999;" class="layer-controls">
+        <!-- Layer Controls -->
+        <div class="layer-controls">
             <button id="village1">Village 1</button>
             <button id="village2">Village 2</button>
             <button id="village3">Village 3</button>
         </div>
     </div>
-    
-    
 
-    <!-- Leaflet library -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
-    <!-- Required libraries for side-by-side control and georaster support -->
+    <!-- Libraries -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="leaflet-side-by-side.min.js"></script>
     <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
     <script src="https://unpkg.com/georaster"></script>
-    
-    <!-- Custom JavaScript -->
-    <script src="script2.js"></script>
+
+    <!-- Main Script -->
+    <script>
+        let villageData = {};
+        let pieChart;
+        let loadingBar;
+        let layer1, layer2, layer3, layer4, layer5, layer6;
+        let sideBySideControl;
+
+        // Amélioration de la gestion de la barre de chargement
+        class LoadingProgress {
+            constructor(totalSteps) {
+                this.totalSteps = totalSteps;
+                this.currentStep = 0;
+                this.loadingBar = document.querySelector('.loading-bar');
+                this.loadingContainer = document.getElementById('loading');
+            }
+
+            start() {
+                this.loadingContainer.style.display = 'block';
+                this.loadingBar.style.width = '0%';
+                this.currentStep = 0;
+            }
+
+            update(step) {
+                // Calcul progressif et linéaire
+                this.currentStep = step;
+                const progress = (this.currentStep / this.totalSteps) * 100;
+                this.loadingBar.style.width = `${Math.min(progress, 100)}%`;
+            }
+
+            complete() {
+                this.loadingBar.style.width = '100%';
+                // Petit délai avant de masquer pour montrer la complétion
+                setTimeout(() => {
+                    this.loadingContainer.style.display = 'none';
+                }, 300);
+            }
+        }
+
+        // URLs des rasters (à remplacer par vos URLs réelles)
+        const rasterUrls = {
+            village1: [
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/10300500E4F91800visual11COG.TIF',
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/103001008244DA00-visual21COG.TIF'
+            ],
+            village2: [
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/10300500E4F91800visual12COG.TIF',
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/103001008244DA00-visual22COG.TIF'
+            ],
+            village3: [
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/10300500E4F91800visual13COG.TIF',
+                'https://webmap-storage.s3.us-east-1.amazonaws.com/103001008244DA00visual23COG.TIF'
+            ]
+        };
+
+        // Charger les données de surface
+        async function initializeVillageData() {
+            try {
+                const response = await fetch('surface.geojson');
+                const data = await response.json();
+                
+                data.features.forEach(feature => {
+                    const village = feature.properties.name;
+                    const surfaceTotale = feature.properties.surface_T;
+                    const surfaceDetruite = feature.properties.surface;
+                    const surfaceNonDetruite = surfaceTotale - surfaceDetruite;
+
+                    villageData[village] = {
+                        detruite: surfaceDetruite,
+                        nonDetruite: surfaceNonDetruite
+                    };
+                });
+            } catch (error) {
+                console.error("Erreur lors du chargement des données du village:", error);
+            }
+        }
+
+        // Mettre à jour le diagramme circulaire
+        function updatePieChart(village) {
+            if (!villageData[village]) {
+                console.error(`Données non disponibles pour ${village}`);
+                return;
+            }
+
+            const data = villageData[village];
+            const chartData = {
+                labels: ['Détruit', 'Non détruit'],
+                datasets: [{
+                    data: [data.detruite, data.nonDetruite],
+                    backgroundColor: ['#FF6384', '#36A2EB'],
+                }]
+            };
+
+            if (pieChart) {
+                pieChart.destroy();
+            }
+
+            pieChart = new Chart(document.getElementById('pieChart'), {
+                type: 'pie',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: village
+                        },
+                        subtitle: {
+                            display: true,
+                            text: 'Surface des bâtiments'
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Charger un raster avec suivi de progression amélioré
+        function loadGeoRasterWithProgress(url, progressTracker, stepIndex) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.responseType = 'arraybuffer';
+
+                xhr.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const progress = event.loaded / event.total;
+                        // Mise à jour progressive et linéaire
+                        progressTracker.update(stepIndex + progress);
+                    }
+                };
+
+                xhr.onload = async () => {
+                    try {
+                        const arrayBuffer = xhr.response;
+                        const georaster = await parseGeoraster(arrayBuffer);
+                        const layer = new GeoRasterLayer({
+                            georaster: georaster,
+                            resolution: 250,
+                        });
+                        progressTracker.update(stepIndex + 1);
+                        resolve(layer);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+
+                xhr.onerror = () => {
+                    reject(new Error(`Erreur de chargement de l'image ${url}`));
+                };
+
+                xhr.send();
+            });
+        }
+
+        // Charger tous les rasters
+        async function loadAllGeoRasters() {
+            const allRasterUrls = [
+                ...rasterUrls.village1,
+                ...rasterUrls.village2,
+                ...rasterUrls.village3
+            ];
+
+            // Créer un tracker de progression
+            const progressTracker = new LoadingProgress(allRasterUrls.length);
+            progressTracker.start();
+            
+            try {
+                const loadedLayers = await Promise.all(
+                    allRasterUrls.map((url, index) => 
+                        loadGeoRasterWithProgress(url, progressTracker, index)
+                    )
+                );
+
+                // Attribution des layers
+                [
+                    layer1, layer2, 
+                    layer3, layer4, 
+                    layer5, layer6
+                ] = loadedLayers;
+
+                progressTracker.complete();
+                return true;
+            } catch (error) {
+                console.error("Erreur lors du chargement des rasters:", error);
+                progressTracker.complete();
+                return false;
+            }
+        }
+
+        // Le reste du code reste identique aux versions précédentes...
+        // (Initialisation de la carte, affichage des couches, etc.)
+
+        // Initialiser la carte Leaflet
+        const map = L.map('map', {
+            center: [31.0245, -8.1356],
+            zoom: 10,
+            dragging: false,
+            keyboard: false
+        });
+
+        // Ajouter la couche de base
+        L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.carto.com/attributions">CARTO</a>'
+        }).addTo(map);
+
+        // Afficher les couches d'un village
+        async function showLayers(layerA, layerB, village) {
+            try {
+                map.eachLayer(layer => {
+                    if (layer !== map.getPanes().tilePane) map.removeLayer(layer);
+                });
+
+                layerA.addTo(map);
+                layerB.addTo(map);
+
+                if (sideBySideControl) map.removeControl(sideBySideControl);
+                map.fitBounds(layerA.getBounds());
+                
+                sideBySideControl = L.control.sideBySide(layerA, layerB).addTo(map);
+
+                updatePieChart(village);
+            } catch (error) {
+                console.error(`Erreur lors de l'affichage des couches pour ${village}:`, error);
+            }
+        }
+
+        // Initialisation
+        async function initializeMap() {
+            try {
+                await initializeVillageData();
+                const loadSuccess = await loadAllGeoRasters();
+                
+                if (loadSuccess) {
+                    document.getElementById('village1').addEventListener('click', () => {
+                        showLayers(layer1, layer2, 'village1');
+                    });
+
+                    document.getElementById('village2').addEventListener('click', () => {
+                        showLayers(layer3, layer4, 'village2');
+                    });
+
+                    document.getElementById('village3').addEventListener('click', () => {
+                        showLayers(layer5, layer6, 'village3');
+                    });
+                }
+            } catch (error) {
+                console.error("Erreur d'initialisation:", error);
+            }
+        }
+
+        // Lancer l'initialisation
+        initializeMap();
+    </script>
 </body>
 </html>
